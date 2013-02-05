@@ -692,6 +692,16 @@ _view_map_dnd_get_callback(GtkWidget *widget, GdkDragContext *context, GtkSelect
 static gboolean _view_map_dnd_failed_callback(GtkWidget *widget, GdkDragContext *drag_context, GtkDragResult result, dt_view_t *self)
 {
   dt_map_t *lib = (dt_map_t*)self->data;
+  const int imgid = lib->selected_image;
+
+  //  the image was dnd out of the map, let's remove it in this case
+
+  const dt_image_t *cimg = dt_image_cache_read_get(darktable.image_cache, imgid);
+  dt_image_t *img = dt_image_cache_write_get(darktable.image_cache, cimg);
+  img->longitude = NAN;
+  img->latitude = NAN;
+  dt_image_cache_write_release(darktable.image_cache, img, DT_IMAGE_CACHE_SAFE);
+  dt_image_cache_read_release(darktable.image_cache, cimg);
 
   g_signal_emit_by_name(lib->map, "changed");
 

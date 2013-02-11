@@ -33,12 +33,14 @@ dt_undo_t *dt_undo_init(void)
   dt_undo_t * udata = malloc(sizeof (dt_undo_t));
   udata->undo_list = NULL;
   udata->redo_list = NULL;
+  dt_pthread_mutex_init(&udata->mutex, NULL);
   return udata;
 }
 
 void dt_undo_cleanup(void)
 {
   dt_undo_clear(darktable.undo, DT_UNDO_ALL);
+  dt_pthread_mutex_destroy(&darktable.undo->mutex);
 }
 
 void dt_undo_record(dt_undo_t *udata, dt_view_t *view, dt_undo_type_t type, dt_undo_data_t *data, void (*undo) (dt_view_t *view, dt_undo_type_t type, dt_undo_data_t *item))
@@ -50,15 +52,18 @@ void dt_undo_record(dt_undo_t *udata, dt_view_t *view, dt_undo_type_t type, dt_u
   item->data = data;
   item->undo = undo;
 
+  dt_pthread_mutex_lock(&darktable.undo->mutex);
   udata->undo_list = g_list_prepend(udata->undo_list, (gpointer)item);
 
   // recording an undo data invalidate all the redo
   g_list_free_full(udata->redo_list,&g_free);
   udata->redo_list = NULL;
+  dt_pthread_mutex_unlock(&darktable.undo->mutex);
 }
 
 void dt_undo_do_redo(dt_undo_t *udata, uint32_t filter)
 {
+  dt_pthread_mutex_lock(&darktable.undo->mutex);
   GList *l = g_list_first(udata->redo_list);
 
   // check for first item that is matching the given pattern
@@ -80,10 +85,12 @@ void dt_undo_do_redo(dt_undo_t *udata, uint32_t filter)
     }
     l=g_list_next(l);
   };
+  dt_pthread_mutex_unlock(&darktable.undo->mutex);
 }
 
 void dt_undo_do_undo(dt_undo_t *udata, uint32_t filter)
 {
+  dt_pthread_mutex_lock(&darktable.undo->mutex);
   GList *l = g_list_first(udata->undo_list);
 
   // check for first item that is matching the given pattern
@@ -106,6 +113,7 @@ void dt_undo_do_undo(dt_undo_t *udata, uint32_t filter)
     }
     l=g_list_next(l);
   };
+  dt_pthread_mutex_unlock(&darktable.undo->mutex);
 }
 
 static void dt_undo_clear_list(GList **list, uint32_t filter)
@@ -129,10 +137,12 @@ static void dt_undo_clear_list(GList **list, uint32_t filter)
 
 void dt_undo_clear(dt_undo_t *udata, uint32_t filter)
 {
+  dt_pthread_mutex_lock(&darktable.undo->mutex);
   dt_undo_clear_list(&udata->undo_list, filter);
   dt_undo_clear_list(&udata->redo_list, filter);
   udata->undo_list = NULL;
   udata->redo_list = NULL;
+  dt_pthread_mutex_unlock(&darktable.undo->mutex);
 }
 
 // modelines: These editor modelines have been set for all relevant files by tools/update_modelines.sh
